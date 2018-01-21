@@ -65,6 +65,10 @@ namespace FallSouls
 
 	RelocPtr <ItemMenuDataManager *> g_itemMenuDataMgr(0x590CA00); //0x590CA00
 
+	RelocPtr <PipboyDataManager *> g_pipboyDataMgr(0x5908B70);
+
+	RelocPtr <PipboyManager *>	g_pipboyManager(0x5A11E20); //48 8B 05 ? ? ? ? 49 8B D9 F3 0F 10 80 ? ? ? ?
+
 	UInt8 InputManager::AllowTextInput(bool allow)
 	{
 		if (allow)

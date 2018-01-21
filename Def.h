@@ -196,6 +196,7 @@ namespace FallSouls
 			kFlag_IncMenuModeCounter = 0x80000000,
 			kFlag_FallSoulsMenu = 0x40000000,
 			kFlag_DoNotDeleteOnClose = 0x02,
+			kFlag_Unk200000 = 0x200000,
 			//Unconfirmed
 			kFlag_Modal = 0x10,
 			kFlag_PreventGameLoad = 0x80,
@@ -452,6 +453,24 @@ namespace FallSouls
 			_MESSAGE("\t\tconstructor: %08X", (uintptr_t)menuConstructor - RelocationManager::s_baseAddr);
 		}
 	};
+
+	struct BSAnimationGraphEvent
+	{
+		UInt64				unk00;
+		BSFixedString		name;
+	};
+
+
+	class PipboyManager : public BSTEventSink<BSAnimationGraphEvent>,
+		public BSInputEventUser
+	{
+	public:
+		UInt64						singleton[2]; // 18
+
+		DEFINE_MEMBER_FUNCTION(ClosePipboyMenu, void, 0xC1F4C0, bool isForced);
+		DEFINE_MEMBER_FUNCTION(PlayHolotape, void, 0xC1EB50, BGSNote*, bool stop); // false. play with animation, without animation in power armor mode. //48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 8B 05 ? ? ? ? 41 0F B6 F0
+	};
+	extern RelocPtr<PipboyManager *>  g_pipboyManager;//59F81A0
 
 
 	extern RelocPtr <SimpleLock>		globalMenuStackLock;
@@ -835,12 +854,109 @@ namespace FallSouls
 	STATIC_ASSERT(offsetof(JobListManager::ServingThread, gameState) == 0x68);
 	extern RelocPtr<JobListManager::ServingThread*>	g_servingThread;
 
+
+
+	// 18 
+	class PipboyValue
+	{
+	public:
+	
+		virtual ~PipboyValue();
+		virtual    void Unk01();    // Sets unk0C to 0
+		virtual void Unk02();    // pure
+		virtual void Unk03(void *arg1);
+		virtual void Unk04();    // pure
+	
+		UInt32          unk08;    // 08 - init'd to incremental variable  hash code
+		UInt8			unk0C;    // 0C - init'd to 1
+		UInt8			unk0D;    // 0D - init'd to 1
+		UInt16			pad0E;    // 0E
+		PipboyValue		* unk10;    // 10
+	};
+	
+	//.?AV?$PipboyPrimitiveValue@I@@ UInt32
+	template <class T>
+	class PipboyPrimitiveValue : public PipboyValue
+	{
+	public:
+	
+		T    value;    // 18    
+	};
+	STATIC_ASSERT(offsetof(PipboyPrimitiveValue<bool>, value) == 0x18);
+	
+	class PipboyObject : public PipboyValue
+	{
+	public:
+	
+		struct PipboyTableItem
+		{
+			BSFixedString		key;
+			PipboyValue			* value;
+			PipboyTableItem		* next;
+
+			bool operator==(const BSFixedString & a_name) const { return key == a_name; }
+			operator BSFixedString() const { return key; }
+	
+			static inline UInt32 GetHash(BSFixedString * key)
+			{
+				UInt32 hash;
+				CalculateCRC32_64(&hash, (UInt64)key->data, 0);
+				return hash;
+			}
+		};
+	
+	
+		virtual ~PipboyObject();
+	
+		tHashSet<PipboyTableItem, BSFixedString>    table;    // 18
+															  //...
+		DEFINE_MEMBER_FUNCTION(GetMember, PipboyValue *, 0xB8A7E0, BSFixedString & name);
+	};
+	
+	class PipboyArray : public PipboyValue
+	{
+	public:
+		virtual ~PipboyArray();
+		struct PipboyTableItem
+		{
+			BSFixedString		key;
+			PipboyValue			* value;
+			PipboyTableItem		* next;
+
+			bool operator==(const BSFixedString & a_name) const { return key == a_name; }
+			operator BSFixedString() const { return key; }
+	
+			static inline UInt32 GetHash(BSFixedString * key)
+			{
+				UInt32 hash;
+				CalculateCRC32_64(&hash, (UInt64)key->data, 0);
+				return hash;
+			}
+		};
+		tArray<PipboyValue*>	  unk18;
+		tHashSet<PipboyTableItem, BSFixedString>    table;    // 30
+		tArray<void*>			  unk60;
+	};
+	
+	STATIC_ASSERT(offsetof(PipboyObject, table) == 0x18);
+
+
 	class ItemMenuDataManager
 	{
 	public:
 
+		DEFINE_MEMBER_FUNCTION(GetSelectedItem, TESForm **, 0x1A3650, UInt32 & handleID);
 	};
 
 	extern RelocPtr <ItemMenuDataManager *> g_itemMenuDataMgr; //0x590CA00
+
+	class PipboyDataManager
+	{
+	public:
+		//4B8
+		UInt64							unk00[0x4A8 >> 3];
+		tArray<PipboyObject*>			itemData;
+	};
+	extern RelocPtr <PipboyDataManager *> g_pipboyDataMgr;
 }
 

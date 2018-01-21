@@ -13,7 +13,7 @@
 #include <queue>
 #include <algorithm>
 
-#define DEBUG 1
+//#define DEBUG 1
 
 namespace FallSouls
 {
@@ -205,6 +205,7 @@ namespace FallSouls
 				pResult->flags &= ~IMenu::kFlag_BlurBackground;
 				pResult->flags &= ~IMenu::kFlag_ShaderWorld;
 				pResult->flags &= ~IMenu::kFlag_PauseGame;
+				//pResult->flags &= ~IMenu::kFlag_Unk200000;
 				pResult->flags |= IMenu::kFlag_FallSoulsMenu;
 			}
 			return pResult;
@@ -698,6 +699,39 @@ namespace FallSouls
 	PipboyMenu::FnInvoke							PipboyMenu::Invoke_Original = nullptr;
 
 
+	class PipboyManagerEx : public PipboyManager
+	{
+	public:
+		using FnReceiveEvent = EventResult(__thiscall PipboyManagerEx::*)(BSAnimationGraphEvent *, void *);
+		static FnReceiveEvent ReceiveEvent_Original;
+
+		EventResult	ReceiveEvent_Hook(BSAnimationGraphEvent * evn, void * dispatcher)
+		{
+			static BSFixedString pipboyClosed("pipboyClosed");
+			static BSFixedString pipboyMenu("PipboyMenu");
+			static BSFixedString levelUpMenu("LevelUpMenu");
+
+			if (evn->name == pipboyClosed)
+			{
+				using FnSendExtraMessage = void(*)(BSFixedString&, UInt32 type, bool);
+				RelocAddr<FnSendExtraMessage> SendExtraMessage(0x204F550);
+				SendExtraMessage(levelUpMenu, kMessage_Close, true);
+				(*g_pipboyManager)->ClosePipboyMenu(true);
+			}
+#ifdef DEBUG
+			_MESSAGE("%08X|%s", evn->unk00, evn->name.c_str());
+#endif
+			return (this->*ReceiveEvent_Original)(evn, dispatcher);
+		}
+
+		static void InitHooks()
+		{
+			ReceiveEvent_Original = HookUtil::SafeWrite64(RelocAddr<uintptr_t>(0x2D53CB0) + 1 * 0x8, &ReceiveEvent_Hook);
+		}
+	};
+	PipboyManagerEx::FnReceiveEvent		PipboyManagerEx::ReceiveEvent_Original = nullptr;
+
+
 	class PipboyHandler : public BSInputEventUser
 	{
 	public:
@@ -850,10 +884,10 @@ namespace FallSouls
 			return result;
 		}
 
-		static void IncreaseCullingProcessRef_Hook(void * pObj) 
+		static void IncreaseCullingProcessRef_Hook(void * pObj, bool isDisabled) 
 		{
 			IncreaseCullingProcessRef(pObj);
-			if (!IsGameRunning(0) || CoreController::globalControlCounter)
+			if (!isDisabled || CoreController::globalControlCounter)
 			{
 				ProcessUserInterface();
 			}
@@ -861,8 +895,28 @@ namespace FallSouls
 
 		static void InitHooks()
 		{
-			SafeWrite8(RelocAddr<uintptr_t>(0x0D38FF2), 0xEB);
-			g_branchTrampoline.Write5Call(RelocAddr<uintptr_t>(0x0D38FEB), (uintptr_t)IncreaseCullingProcessRef_Hook);
+			static RelocAddr <uintptr_t> UpdateUserInterface_Entry(0x0D38FEB);
+			struct UpdateUserInterface_Code : Xbyak::CodeGenerator
+			{
+				UpdateUserInterface_Code(void * buf) : Xbyak::CodeGenerator(4096, buf)
+				{
+					Xbyak::Label retnLabel;
+					mov(dl, bl);
+					mov(rax, (uintptr_t)IncreaseCullingProcessRef_Hook);
+					call(rax);
+
+					jmp(ptr[rip + retnLabel]);
+					L(retnLabel);
+					dq(UpdateUserInterface_Entry.GetUIntPtr() + 0x5);
+				}
+			};
+			void * codeBuf = g_localTrampoline.StartAlloc();
+			UpdateUserInterface_Code code(codeBuf);
+			g_localTrampoline.EndAlloc(code.getCurr());
+			g_branchTrampoline.Write5Branch(UpdateUserInterface_Entry.GetUIntPtr(), (uintptr_t)codeBuf);
+			SafeWrite8(UpdateUserInterface_Entry.GetUIntPtr() + 7, 0xEB);
+
+			//g_branchTrampoline.Write5Call(RelocAddr<uintptr_t>(0x0D38FEB), (uintptr_t)IncreaseCullingProcessRef_Hook);
 			g_branchTrampoline.Write5Call(RelocAddr<uintptr_t>(0x0D3916B), (uintptr_t)MessageQueueProcessTask_Hook);
 		}
 	};
@@ -904,6 +958,7 @@ namespace FallSouls
 		BarterMenu::InitHooks();
 		ExamineMenu::InitHooks();
 		PipboyMenu::InitHooks();
+		PipboyManagerEx::InitHooks();
 		PipboyHandler::InitHooks();
 		DialogueMenu::InitHooks();
 		MenuTopicManagerEx::InitHooks();

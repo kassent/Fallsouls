@@ -9,7 +9,7 @@
 
 #include "Hooks.h"
 
-#define PLUGIN_VERSION	MAKE_EXE_VERSION(1, 0, 2)
+#define PLUGIN_VERSION	MAKE_EXE_VERSION(1, 0, 3)
 #define PLUGIN_NAME		"FallSouls"
 
 IDebugLog						gLog;
