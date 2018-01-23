@@ -753,6 +753,27 @@ namespace FallSouls
 	PipboyHandler::FnCanProcess		PipboyHandler::CanProcess_Original = nullptr;
 
 
+	class FavoritesManagerEx : public FavoritesManager
+	{
+	public:
+		using FnCanProcess = bool(__thiscall FavoritesManagerEx::*)(InputEvent *);
+		static FnCanProcess	CanProcess_Original;
+
+		bool CanProcess_Hook(InputEvent * inputEvent)
+		{
+			if (CoreController::globalControlCounter)
+				return false;
+			return (this->*CanProcess_Original)(inputEvent);
+		}
+
+		static void InitHooks()
+		{
+			CanProcess_Original = HookUtil::SafeWrite64(RelocAddr<uintptr_t>(0x2DB04D8) + 1 * 0x8, &CanProcess_Hook);
+		}
+	};
+	FavoritesManagerEx::FnCanProcess FavoritesManagerEx::CanProcess_Original = nullptr;
+
+
 	class MainMenu : public GameMenuBase
 	{
 	public:
@@ -787,7 +808,7 @@ namespace FallSouls
 		{
 			RelocAddr<FnCreateInstance>	CreateInstance_Original(0x126ABE0);
 			auto * result = CreateInstance_Original(pMem);
-			result->context = 5;
+			result->depth = 5;
 			return result;
 		}
 		static void InitHooks()
@@ -960,6 +981,7 @@ namespace FallSouls
 		PipboyMenu::InitHooks();
 		PipboyManagerEx::InitHooks();
 		PipboyHandler::InitHooks();
+		FavoritesManagerEx::InitHooks();
 		DialogueMenu::InitHooks();
 		MenuTopicManagerEx::InitHooks();
 		SleepWaitMenu::InitHooks();

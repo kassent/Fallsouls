@@ -69,6 +69,8 @@ namespace FallSouls
 
 	RelocPtr <PipboyManager *>	g_pipboyManager(0x5A11E20); //48 8B 05 ? ? ? ? 49 8B D9 F3 0F 10 80 ? ? ? ?
 
+	RelocPtr <FavoritesManager*> g_favoritesManager(0x05A97CE0);
+
 	UInt8 InputManager::AllowTextInput(bool allow)
 	{
 		if (allow)
